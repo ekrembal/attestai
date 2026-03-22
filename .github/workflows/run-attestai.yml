@@ -1,0 +1,356 @@
+name: Run Attestai
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Branch to update directly.
+        required: true
+        type: string
+      prompt:
+        description: Exact Attestai prompt to execute.
+        required: true
+        type: string
+      start_commit:
+        description: Optional commit to start from. Defaults to the current target head, or empty genesis when the target branch does not exist.
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: attestai-${{ inputs.target_branch }}
+  cancel-in-progress: false
+
+jobs:
+  run-attestai:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_BRANCH: ${{ inputs.target_branch }}
+      PROMPT_RAW: ${{ inputs.prompt }}
+      START_COMMIT: ${{ inputs.start_commit }}
+      CODEX_MODEL: gpt-5.4
+      CODEX_VERSION: 0.116.0
+      CODEX_SANDBOX: danger-full-access
+      CODEX_APPROVAL_POLICY: never
+      CODEX_ARGS: '["--search"]'
+      WORKFLOW_PATH: .github/workflows/run-attestai.yml
+    steps:
+      - name: Check out workflow repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Prepare metadata paths and prompt metadata
+        run: |
+          set -euo pipefail
+
+          mkdir -p "${RUNNER_TEMP}/attestai"
+
+          prompt_normalized="$(printf '%s' "${PROMPT_RAW}" | tr '\r\n\t' ' ' | tr -s '[:space:]' ' ' | sed -E 's/^ //; s/ $//')"
+          if [[ -z "${prompt_normalized}" ]]; then
+            echo "Prompt must contain non-whitespace content." >&2
+            exit 1
+          fi
+
+          prompt_summary="$(printf '%s' "${prompt_normalized}" | sed -E 's/^(.{0,37}).*$/\1/; s#[ .,:;_/-]+$##')"
+          prompt_summary="${prompt_summary:-run}"
+          if [[ ${#prompt_normalized} -gt 37 && "${prompt_summary}" != "run" ]]; then
+            prompt_summary="${prompt_summary}..."
+          fi
+
+          prompt_sha256="$(printf '%s' "${prompt_normalized}" | sha256sum | awk '{print $1}')"
+          workflow_sha256="$(sha256sum "${WORKFLOW_PATH}" | awk '{print $1}')"
+
+          {
+            echo "COMMIT_SUBJECT_FILE=${RUNNER_TEMP}/attestai/attestai-commit.txt"
+            echo "CODEX_OUTPUT_FILE=${RUNNER_TEMP}/attestai/codex-output.md"
+            echo "PROMPT_NORMALIZED=${prompt_normalized}"
+            echo "PROMPT_SUMMARY=${prompt_summary}"
+            echo "PROMPT_SHA256=${prompt_sha256}"
+            echo "WORKFLOW_SHA256=${workflow_sha256}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Resolve target, verify Attestai links, and choose start point
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          resolve_commit() {
+            local ref="$1"
+
+            if git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null; then
+              git rev-parse "${ref}^{commit}"
+              return
+            fi
+
+            if git fetch --no-tags origin "${ref}" >/dev/null 2>&1; then
+              git rev-parse FETCH_HEAD^{commit}
+              return
+            fi
+
+            echo "Unable to resolve start_commit '${ref}' as a commit or remote ref." >&2
+            exit 1
+          }
+
+          commit_body_json() {
+            local commit="$1"
+            git show -s --format=%B "${commit}" | sed '1,/^$/d'
+          }
+
+          verify_attestai_commit() {
+            local commit="$1"
+            local label="$2"
+            local subject_file="$3"
+            local body_json prompt_sha256 body_prompt_sha256 workflow_sha256
+
+            if [[ "$(git show -s --format=%s "${commit}")" != Attestai:* ]]; then
+              echo "Commit ${commit} is not an Attestai commit." >&2
+              exit 1
+            fi
+
+            body_json="$(commit_body_json "${commit}")"
+            if [[ -z "${body_json}" ]]; then
+              echo "Commit ${commit} is missing its JSON body." >&2
+              exit 1
+            fi
+
+            if ! printf '%s' "${body_json}" | jq -e '
+              type == "object" and
+              .attestai_version == 1 and
+              (.prompt | type == "string") and
+              (.prompt_sha256 | type == "string") and
+              (.workflow_sha256 | type == "string") and
+              (.model | type == "string") and
+              (.codex_version | type == "string")
+            ' >/dev/null; then
+              echo "Commit ${commit} does not contain a valid Attestai JSON body." >&2
+              exit 1
+            fi
+
+            workflow_sha256="$(printf '%s' "${body_json}" | jq -r '.workflow_sha256')"
+            if [[ "${workflow_sha256}" != "${WORKFLOW_SHA256}" ]]; then
+              echo "Commit ${commit} was produced by a different workflow hash." >&2
+              exit 1
+            fi
+
+            prompt_sha256="$(printf '%s' "$(printf '%s' "${body_json}" | jq -r '.prompt')" | sha256sum | awk '{print $1}')"
+            body_prompt_sha256="$(printf '%s' "${body_json}" | jq -r '.prompt_sha256')"
+            if [[ "${prompt_sha256}" != "${body_prompt_sha256}" ]]; then
+              echo "Commit ${commit} has a prompt digest mismatch." >&2
+              exit 1
+            fi
+
+            git cat-file commit "${commit}" > "${subject_file}"
+            if ! gh attestation verify "${subject_file}" -R "${REPOSITORY}" --signer-workflow "${REPOSITORY}/${WORKFLOW_PATH}" >/dev/null; then
+              echo "Attestation verification failed for ${label} (${commit})." >&2
+              exit 1
+            fi
+          }
+
+          if ! git check-ref-format --branch "${TARGET_BRANCH}" >/dev/null 2>&1; then
+            echo "Invalid target branch: ${TARGET_BRANCH}" >&2
+            exit 1
+          fi
+
+          timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          target_branch_slug="$(printf '%s' "${TARGET_BRANCH}" | tr '[:upper:]' '[:lower:]')"
+
+          target_branch_created=false
+          current_target_sha=""
+          start_sha=""
+          backup_branch=""
+
+          if git ls-remote --exit-code --heads origin "refs/heads/${TARGET_BRANCH}" >/dev/null 2>&1; then
+            git fetch --no-tags origin "+refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}"
+            current_target_sha="$(git rev-parse "origin/${TARGET_BRANCH}")"
+            verify_attestai_commit "${current_target_sha}" "target branch head" "$(mktemp "${RUNNER_TEMP}/attestai/target-head.XXXXXX.txt")"
+
+            if [[ -n "${START_COMMIT}" ]]; then
+              start_sha="$(resolve_commit "${START_COMMIT}")"
+              if [[ "${start_sha}" != "${current_target_sha}" ]]; then
+                verify_attestai_commit "${start_sha}" "start commit" "$(mktemp "${RUNNER_TEMP}/attestai/start.XXXXXX.txt")"
+                backup_branch="backup/${target_branch_slug}/${timestamp}-${current_target_sha:0:12}"
+                git branch -f "${backup_branch}" "${current_target_sha}"
+                git push origin "refs/heads/${backup_branch}:refs/heads/${backup_branch}"
+              fi
+            else
+              start_sha="${current_target_sha}"
+            fi
+
+            git switch --detach "${start_sha}" >/dev/null
+          else
+            target_branch_created=true
+
+            if [[ -n "${START_COMMIT}" ]]; then
+              start_sha="$(resolve_commit "${START_COMMIT}")"
+              verify_attestai_commit "${start_sha}" "start commit" "$(mktemp "${RUNNER_TEMP}/attestai/start.XXXXXX.txt")"
+              git switch --detach "${start_sha}" >/dev/null
+            else
+              git switch --orphan "__attestai_${timestamp}" >/dev/null
+              git rm -rf . >/dev/null 2>&1 || true
+              find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+              git clean -fdx >/dev/null 2>&1 || true
+            fi
+          fi
+
+          {
+            echo "TARGET_BRANCH_CREATED=${target_branch_created}"
+            echo "CURRENT_TARGET_SHA=${current_target_sha}"
+            echo "START_SHA=${start_sha}"
+            echo "BACKUP_BRANCH=${backup_branch}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Run Codex
+        shell: bash
+        env:
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+        run: |
+          set -euo pipefail
+
+          npm i -g @openai/codex@${CODEX_VERSION}
+
+          export HOME="$RUNNER_TEMP/codex-home"
+          mkdir -p "$HOME/.codex"
+          chmod 700 "$HOME/.codex"
+
+          cleanup() {
+            shred -u "$HOME/.codex/auth.json" 2>/dev/null || rm -f "$HOME/.codex/auth.json"
+          }
+          trap cleanup EXIT
+
+          if [[ -z "${CODEX_AUTH_JSON:-}" ]]; then
+            echo "Missing repository secret CODEX_AUTH_JSON." >&2
+            echo "Populate it with the full contents of ~/.codex/auth.json from a machine where Codex is already logged in." >&2
+            exit 1
+          fi
+          if ! printf '%s' "${CODEX_AUTH_JSON}" | jq -e 'type == "object" and has("tokens") and has("last_refresh")' >/dev/null; then
+            echo "Repository secret CODEX_AUTH_JSON is not a valid Codex auth.json payload." >&2
+            echo "Set it to the exact contents of ~/.codex/auth.json, not a file path, secret name, or wrapper JSON." >&2
+            exit 1
+          fi
+
+          printf '%s' "${CODEX_AUTH_JSON}" > "$HOME/.codex/auth.json"
+          chmod 600 "$HOME/.codex/auth.json"
+          unset CODEX_AUTH_JSON
+
+          codex login status
+
+          eval "EXTRA_ARGS=($(echo "$CODEX_ARGS" | jq -r '.[] | @sh'))"
+
+          printf '%s' "${PROMPT_NORMALIZED}" | codex \
+            --ask-for-approval "${CODEX_APPROVAL_POLICY}" \
+            "${EXTRA_ARGS[@]}" \
+            exec \
+            --model "${CODEX_MODEL}" \
+            --sandbox "${CODEX_SANDBOX}" \
+            --output-last-message "${CODEX_OUTPUT_FILE}" \
+            -
+
+      - name: Create Attestai commit and attestation subject
+        run: |
+          set -euo pipefail
+
+          commit_title="Attestai: ${PROMPT_SUMMARY}"
+          commit_body_file="$(mktemp)"
+          commit_message_file="$(mktemp)"
+
+          jq -n \
+            --arg prompt "${PROMPT_NORMALIZED}" \
+            --arg prompt_sha256 "${PROMPT_SHA256}" \
+            --arg workflow_sha256 "${WORKFLOW_SHA256}" \
+            --arg model "${CODEX_MODEL}" \
+            --arg codex_version "${CODEX_VERSION}" \
+            '{
+              prompt: $prompt,
+              model: $model,
+              codex_version: $codex_version,
+              attestai_version: 1,
+              prompt_sha256: $prompt_sha256,
+              workflow_sha256: $workflow_sha256
+            }' > "${commit_body_file}"
+
+          {
+            echo "${commit_title}"
+            echo
+            cat "${commit_body_file}"
+          } > "${commit_message_file}"
+
+          git add -A
+          git -c commit.gpgsign=false -c commit.cleanup=verbatim commit --allow-empty --file "${commit_message_file}"
+
+          head_sha="$(git rev-parse HEAD)"
+          parent_sha="$(git rev-list --parents -n 1 "${head_sha}" | awk '{print (NF > 1) ? $2 : ""}')"
+          git cat-file commit "${head_sha}" > "${COMMIT_SUBJECT_FILE}"
+          subject_sha256="$(sha256sum "${COMMIT_SUBJECT_FILE}" | awk '{print $1}')"
+
+          rm -f "${commit_body_file}" "${commit_message_file}"
+
+          {
+            echo "HEAD_SHA=${head_sha}"
+            echo "PARENT_SHA=${parent_sha}"
+            echo "COMMIT_TITLE=${commit_title}"
+            echo "COMMIT_SUBJECT_SHA256=${subject_sha256}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Create Attestai commit attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ env.COMMIT_SUBJECT_FILE }}
+
+      - name: Push directly to target branch
+        run: |
+          set -euo pipefail
+
+          if [[ "${TARGET_BRANCH_CREATED}" == "true" ]]; then
+            git push --set-upstream origin "HEAD:refs/heads/${TARGET_BRANCH}"
+          else
+            git push \
+              --force-with-lease=refs/heads/${TARGET_BRANCH}:${CURRENT_TARGET_SHA} \
+              origin \
+              HEAD:refs/heads/${TARGET_BRANCH}
+          fi
+
+      - name: Upload run artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: attestai-run-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.COMMIT_SUBJECT_FILE }}
+          retention-days: 14
+
+      - name: Write workflow summary
+        run: |
+          start_display="${START_SHA:-<empty-genesis>}"
+          parent_display="${PARENT_SHA:-<genesis>}"
+          backup_display="${BACKUP_BRANCH:-<none>}"
+
+          {
+            echo "## Run Attestai"
+            echo
+            echo "- Target branch: \`${TARGET_BRANCH}\`"
+            echo "- Target branch created: \`${TARGET_BRANCH_CREATED}\`"
+            echo "- Start SHA: \`${start_display}\`"
+            echo "- Parent SHA: \`${parent_display}\`"
+            echo "- New head SHA: \`${HEAD_SHA}\`"
+            echo "- Backup branch: \`${backup_display}\`"
+            echo "- Workflow SHA-256: \`${WORKFLOW_SHA256}\`"
+            echo "- Commit subject SHA-256: \`${COMMIT_SUBJECT_SHA256}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
