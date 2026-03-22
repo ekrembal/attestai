@@ -1,73 +1,49 @@
-# React + TypeScript + Vite
+# PDF Utils
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Browser-only PDF utilities built with React, TypeScript, and Vite. The app runs entirely client-side for merge, split, reorder, rotate, delete, page extraction, and text extraction workflows.
 
-Currently, two official plugins are available:
+## Development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Production Build
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+This app is configured for static hosting with relative production asset paths:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- Vite uses `base: "./"` so emitted assets resolve from the current content path.
+- React Router uses `HashRouter` so tool routes work on IPFS gateways and other static hosts without rewrite rules.
+
+Build the production output with:
+
+```bash
+npm run build
 ```
+
+## IPFS Packaging
+
+The current production build in [`dist/`](/home/runner/work/attestai/attestai/dist) was packed locally with `ipfs-car` and not published:
+
+```bash
+npx --yes ipfs-car pack dist --output dist.car
+```
+
+Generated CID:
+
+```text
+bafybeihyhv2amgqxwbuflexs3hv4tueeup7jm2pgag7gjbifgzk7w3f4dq
+```
+
+Example gateway URLs for this exact build:
+
+- Root app: `https://ipfs.io/ipfs/bafybeihyhv2amgqxwbuflexs3hv4tueeup7jm2pgag7gjbifgzk7w3f4dq/`
+- Home route: `https://ipfs.io/ipfs/bafybeihyhv2amgqxwbuflexs3hv4tueeup7jm2pgag7gjbifgzk7w3f4dq/#/`
+- Merge tool: `https://ipfs.io/ipfs/bafybeihyhv2amgqxwbuflexs3hv4tueeup7jm2pgag7gjbifgzk7w3f4dq/#/tools/merge`
+- Extract text tool: `https://ipfs.io/ipfs/bafybeihyhv2amgqxwbuflexs3hv4tueeup7jm2pgag7gjbifgzk7w3f4dq/#/tools/extract-text`
+
+Alternative gateways with the same CID:
+
+- `https://cloudflare-ipfs.com/ipfs/bafybeihyhv2amgqxwbuflexs3hv4tueeup7jm2pgag7gjbifgzk7w3f4dq/`
+- `https://gateway.pinata.cloud/ipfs/bafybeihyhv2amgqxwbuflexs3hv4tueeup7jm2pgag7gjbifgzk7w3f4dq/#/tools/merge`
