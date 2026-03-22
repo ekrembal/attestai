@@ -1,21 +1,52 @@
-# React + TypeScript + Vite + shadcn/ui
+# Document Form Helper
 
-This is a template for a new Vite project with React, TypeScript, and shadcn/ui.
+Document Form Helper is a browser-only PDF annotation app. It lets you load a local PDF, add text, place signatures, stamp images, and export the edited file without sending documents to a server.
 
-## Adding components
+You can use any of the links below to access the app:
 
-To add components to your app, run the following command:
+- [ipfs.io](https://ipfs.io/ipfs/bafybeigncaiyzk6tcf6n5ao4f2s5hwmbw4exltvku6kywyyvecsbvu4mkm/)
+- [dweb.link](https://dweb.link/ipfs/bafybeigncaiyzk6tcf6n5ao4f2s5hwmbw4exltvku6kywyyvecsbvu4mkm/)
+- [w3s.link](https://w3s.link/ipfs/bafybeigncaiyzk6tcf6n5ao4f2s5hwmbw4exltvku6kywyyvecsbvu4mkm/)
+- [gateway.pinata.cloud](https://gateway.pinata.cloud/ipfs/bafybeigncaiyzk6tcf6n5ao4f2s5hwmbw4exltvku6kywyyvecsbvu4mkm/)
+
+## Reproducible IPFS Build
+
+This repository is pinned to:
+
+- Node `22.22.1`
+- npm `10.9.4`
+- Exact dependency versions in `package.json`
+- The committed `package-lock.json`
+
+The production build is configured for IPFS and nested-path hosting:
+
+- Vite uses relative asset URLs via `base: "./"`
+- The app avoids production sourcemaps, which prevents absolute local filesystem paths from leaking into `dist/`
+- Rebuilds should be performed from a clean checkout with the exact toolchain above
+
+## Clean Rebuild Steps
+
+From a fresh clone, use exactly these commands:
 
 ```bash
-npx shadcn@latest add button
+nvm use
+npm ci
+npm run build
+ipfs add -r -n -Q --cid-version=1 dist
 ```
 
-This will place the ui components in the `src/components` directory.
+If you want to simulate a fresh local rebuild in an existing checkout, run:
 
-## Using components
+```bash
+rm -rf node_modules dist
+nvm use
+npm ci
+npm run build
+ipfs add -r -n -Q --cid-version=1 dist
+```
 
-To use the components in your app, import them as follows:
+The resulting CID for `dist/` should be:
 
-```tsx
-import { Button } from "@/components/ui/button"
+```text
+bafybeigncaiyzk6tcf6n5ao4f2s5hwmbw4exltvku6kywyyvecsbvu4mkm
 ```
