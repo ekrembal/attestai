@@ -5,7 +5,11 @@ import path from 'node:path'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: './',
   plugins: [react(), tailwindcss()],
+  build: {
+    sourcemap: false,
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
