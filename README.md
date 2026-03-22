@@ -1,73 +1,64 @@
-# React + TypeScript + Vite
+# attestai
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+`attestai` is a browser-only QR utility. It generates QR codes from text or URLs, can decode QR codes from the camera or uploaded images, and keeps everything client-side with no backend service.
 
-Currently, two official plugins are available:
+You can use any of the links below to access the app:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- https://ipfs.io/ipfs/bafybeicpj77q77pf5alpr32yfrzvhrfwelzutnb3idlp55nfjcehvdsdru/
+- https://dweb.link/ipfs/bafybeicpj77q77pf5alpr32yfrzvhrfwelzutnb3idlp55nfjcehvdsdru/
+- https://w3s.link/ipfs/bafybeicpj77q77pf5alpr32yfrzvhrfwelzutnb3idlp55nfjcehvdsdru/
+- https://cloudflare-ipfs.com/ipfs/bafybeicpj77q77pf5alpr32yfrzvhrfwelzutnb3idlp55nfjcehvdsdru/
+- https://gateway.pinata.cloud/ipfs/bafybeicpj77q77pf5alpr32yfrzvhrfwelzutnb3idlp55nfjcehvdsdru/
 
-## React Compiler
+## Reproducible Build
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The production build is configured to be reproducible from a fresh clone:
 
-## Expanding the ESLint configuration
+- Relative asset paths are enabled via Vite `base: './'`, so the app works from IPFS gateways and nested content paths.
+- The exact toolchain is pinned in the repo: Node `22.22.1` and npm `10.9.4`.
+- Exact dependency versions are declared in `package.json` and locked in `package-lock.json`.
+- `.npmrc` enables `engine-strict=true` so installs fail fast on the wrong Node/npm versions.
+- Source maps are disabled for production output to avoid embedding local filesystem paths in emitted artifacts.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+If you rebuild with the same committed sources, the exact toolchain above, and the commands below, you should get the same `dist/` contents and the same CID:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+nvm use
+npm ci
+npm run build
+export IPFS_PATH="$(mktemp -d)"
+ipfs init
+ipfs add -r -n -Q --cid-version=1 dist
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Expected CID:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```text
+bafybeicpj77q77pf5alpr32yfrzvhrfwelzutnb3idlp55nfjcehvdsdru
 ```
+
+## Clean Rebuild Steps
+
+From a fresh clone:
+
+```bash
+git clone <repo-url>
+cd attestai
+nvm use
+npm ci
+npm run build
+export IPFS_PATH="$(mktemp -d)"
+ipfs init
+ipfs add -r -n -Q --cid-version=1 dist
+```
+
+If `nvm` is not installed, use Node `22.22.1` and npm `10.9.4` directly before running `npm ci`.
+
+## Verification Notes
+
+The deterministic build contract for this repo is:
+
+- Install dependencies with `npm ci`, not `npm install`.
+- Build from the committed lockfile and exact versions already recorded in the repo.
+- Do not add source maps or other build steps that inject timestamps, host metadata, absolute local paths, or random values into `dist/`.
+- Compute the CID in no-publish mode with `ipfs add -r -n -Q --cid-version=1 dist`.
