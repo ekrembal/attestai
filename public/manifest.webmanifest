@@ -1,0 +1,17 @@
+{
+  "name": "QR Tools",
+  "short_name": "QR Tools",
+  "description": "Create and scan QR codes entirely on device.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4f4f5",
+  "theme_color": "#111111",
+  "icons": [
+    {
+      "src": "./icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -81,9 +81,13 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
   }
   html {
     @apply font-sans;
+  }
+  body,
+  #root {
+    min-height: 100vh;
   }
 }

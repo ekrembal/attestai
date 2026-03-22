@@ -1,6 +1,6 @@
-# attestai
+# QR Tools
 
-`attestai` is a browser-only QR utility. It generates QR codes from text or URLs, can decode QR codes from the camera or uploaded images, and keeps everything client-side with no backend service.
+`QR Tools` is a browser-only QR utility. It generates QR codes from text or URLs, can decode QR codes from the camera or uploaded images, and keeps everything client-side with no backend service.
 
 You can use any of the links below to access the app:
 
@@ -42,8 +42,8 @@ bafybeicpj77q77pf5alpr32yfrzvhrfwelzutnb3idlp55nfjcehvdsdru
 From a fresh clone:
 
 ```bash
-git clone <repo-url>
-cd attestai
+git clone <repo-url> qr-tools
+cd qr-tools
 nvm use
 npm ci
 npm run build
@@ -62,3 +62,4 @@ The deterministic build contract for this repo is:
 - Build from the committed lockfile and exact versions already recorded in the repo.
 - Do not add source maps or other build steps that inject timestamps, host metadata, absolute local paths, or random values into `dist/`.
 - Compute the CID in no-publish mode with `ipfs add -r -n -Q --cid-version=1 dist`.
+- If the CID changes, update this README in the same change so the project name remains `QR Tools` and all gateway links stay synchronized with the latest CID.
