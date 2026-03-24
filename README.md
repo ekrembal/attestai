@@ -13,25 +13,14 @@ AI-generated code is everywhere, but there is no standard way to answer a simple
 ## How It Works
 
 ```mermaid
-flowchart TB
-  subgraph inputs["Trigger"]
-    A["workflow_dispatch<br/>prompt + target_branch"]
-  end
-
-  subgraph runner["GitHub Actions runner"]
-    B["Verify chain:<br/>each commit on target branch<br/>has valid Attestai attestation"]
-    C["OpenAI Codex runs the prompt<br/>and updates the working tree"]
-    D["Git commit with JSON body:<br/>prompt, SHA-256, model, Codex version,<br/>workflow file hash"]
-    E["actions/attest signs the<br/>raw commit (Sigstore)"]
-    F["git push to target branch"]
-  end
-
-  A --> B
-  B -->|"broken or missing attestation"| X["Workflow stops"]
-  B -->|"chain OK (or new branch)"| C
-  C --> D
-  D --> E
-  E --> F
+%%{init: {'themeVariables': {'fontSize': '11px'}}}%%
+flowchart LR
+  A[prompt + branch] --> B[Verify chain]
+  B -->|bad chain| X[Stop]
+  B -->|ok| C[Codex]
+  C --> D[Commit + JSON]
+  D --> E[Attest]
+  E --> F[Push]
 ```
 
 1. A `workflow_dispatch` trigger accepts a **prompt** and a **target branch**.
