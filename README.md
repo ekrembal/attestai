@@ -1,6 +1,6 @@
 # Attestai
 
-Attestai is a GitHub Actions workflow that generates source code from natural-language prompts using [OpenAI Codex](https://openai.com/index/codex/) and creates a cryptographic attestation for every commit. The result is a verifiable chain of provenance: anyone can confirm that every line of code in a branch was produced by AI from a specific sequence of prompts, executed by a specific workflow, and signed by GitHub Actions — with nothing altered in between.
+Attestai is a GitHub Actions workflow that generates source code from natural-language prompts using [OpenAI Codex](https://chatgpt.com/codex/) and creates a cryptographic attestation for every commit. The result is a verifiable chain of provenance: anyone can confirm that every line of code in a branch was produced by AI from a specific sequence of prompts, executed by a specific workflow, and signed by GitHub Actions — with nothing altered in between.
 
 ## Problem
 
@@ -11,6 +11,28 @@ AI-generated code is everywhere, but there is no standard way to answer a simple
 - Open-source audits assume human authors; there is no tooling for auditing prompt-to-code pipelines.
 
 ## How It Works
+
+```mermaid
+flowchart TB
+  subgraph inputs["Trigger"]
+    A["workflow_dispatch<br/>prompt + target_branch"]
+  end
+
+  subgraph runner["GitHub Actions runner"]
+    B["Verify chain:<br/>each commit on target branch<br/>has valid Attestai attestation"]
+    C["OpenAI Codex runs the prompt<br/>and updates the working tree"]
+    D["Git commit with JSON body:<br/>prompt, SHA-256, model, Codex version,<br/>workflow file hash"]
+    E["actions/attest signs the<br/>raw commit (Sigstore)"]
+    F["git push to target branch"]
+  end
+
+  A --> B
+  B -->|"broken or missing attestation"| X["Workflow stops"]
+  B -->|"chain OK (or new branch)"| C
+  C --> D
+  D --> E
+  E --> F
+```
 
 1. A `workflow_dispatch` trigger accepts a **prompt** and a **target branch**.
 2. The workflow verifies that every existing commit on the target branch already carries a valid Attestai attestation (unbroken chain).
@@ -90,6 +112,10 @@ The workflow will create the branch (if it doesn't exist), run Codex, commit the
 ### Security Warning
 
 > **Do not use this in repositories where other people have access.** Repository secrets are exposed to anyone who can trigger workflows in the repo. If collaborators or forks can run Actions in your repository, they can read `CODEX_AUTH_JSON`. Only use this in private, single-user repositories or repositories where you fully trust every collaborator.
+
+## License
+
+This project is licensed under the [GNU General Public License v3.0](LICENSE) (GPL-3.0). See [`LICENSE`](LICENSE) for the full text.
 
 ## Prerequisites
 
