@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Prompt Paster",
+  "description": "Save selected text as prompts and paste recent prompts from a keyboard shortcut.",
+  "version": "0.0.1",
+  "action": {
+    "default_title": "Prompt Paster"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_ui": {
+    "page": "index.html",
+    "open_in_tab": true
+  },
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "prompt-paster@attestai.local"
+    }
+  }
+}
