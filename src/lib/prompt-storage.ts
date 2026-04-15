@@ -11,6 +11,7 @@ export type PromptRecord = {
 export type ShortcutCombo = {
   key: string
   code: string
+  primaryKey?: boolean
   ctrlKey: boolean
   metaKey: boolean
   altKey: boolean
@@ -27,7 +28,8 @@ export const SETTINGS_STORAGE_KEY = "attestai.settings"
 export const DEFAULT_SHORTCUT: ShortcutCombo = {
   key: " ",
   code: "Space",
-  ctrlKey: true,
+  primaryKey: true,
+  ctrlKey: false,
   metaKey: false,
   altKey: false,
   shiftKey: true,
@@ -142,14 +144,31 @@ export function createTitle(body: string): string {
 
 export function formatShortcut(shortcut: ShortcutCombo): string {
   const parts = [
-    shortcut.ctrlKey ? "Ctrl" : null,
-    shortcut.metaKey ? "Meta" : null,
+    shortcut.primaryKey ? "Ctrl/⌘" : null,
+    !shortcut.primaryKey && shortcut.ctrlKey ? "Ctrl" : null,
+    !shortcut.primaryKey && shortcut.metaKey ? "⌘" : null,
     shortcut.altKey ? "Alt" : null,
     shortcut.shiftKey ? "Shift" : null,
     normalizeKeyLabel(shortcut),
   ].filter(Boolean)
 
   return parts.join(" + ")
+}
+
+export function normalizeShortcut(shortcut?: ShortcutCombo): ShortcutCombo {
+  if (!shortcut) {
+    return DEFAULT_SHORTCUT
+  }
+
+  if (shortcut.primaryKey) {
+    return { ...shortcut, primaryKey: true, ctrlKey: false, metaKey: false }
+  }
+
+  if (shortcut.ctrlKey !== shortcut.metaKey) {
+    return { ...shortcut, primaryKey: true, ctrlKey: false, metaKey: false }
+  }
+
+  return { ...shortcut, primaryKey: false }
 }
 
 export function shortcutFromKeyboardEvent(
@@ -167,8 +186,9 @@ export function shortcutFromKeyboardEvent(
   return {
     key,
     code: event.code,
-    ctrlKey: event.ctrlKey,
-    metaKey: event.metaKey,
+    primaryKey: event.ctrlKey !== event.metaKey,
+    ctrlKey: event.ctrlKey === event.metaKey ? event.ctrlKey : false,
+    metaKey: event.ctrlKey === event.metaKey ? event.metaKey : false,
     altKey: event.altKey,
     shiftKey: event.shiftKey,
   }

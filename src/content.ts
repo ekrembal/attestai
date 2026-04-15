@@ -11,6 +11,7 @@ type PromptRecord = {
 type ShortcutCombo = {
   key: string
   code: string
+  primaryKey?: boolean
   ctrlKey: boolean
   metaKey: boolean
   altKey: boolean
@@ -54,7 +55,8 @@ const DEFAULT_SETTINGS: PromptSettings = {
   shortcut: {
     key: " ",
     code: "Space",
-    ctrlKey: true,
+    primaryKey: true,
+    ctrlKey: false,
     metaKey: false,
     altKey: false,
     shiftKey: true,
@@ -147,6 +149,16 @@ function makePrompt(body: string): PromptRecord {
 }
 
 function isShortcutMatch(event: KeyboardEvent, shortcut: ShortcutCombo) {
+  if (shortcut.primaryKey) {
+    return (
+      event.code === shortcut.code &&
+      event.ctrlKey !== event.metaKey &&
+      (event.ctrlKey || event.metaKey) &&
+      event.altKey === shortcut.altKey &&
+      event.shiftKey === shortcut.shiftKey
+    )
+  }
+
   return (
     event.code === shortcut.code &&
     event.ctrlKey === shortcut.ctrlKey &&
@@ -156,26 +168,56 @@ function isShortcutMatch(event: KeyboardEvent, shortcut: ShortcutCombo) {
   )
 }
 
-function isEditableElement(element: Element | null): element is HTMLElement {
-  if (!element || !(element instanceof HTMLElement)) {
-    return false
+function normalizeShortcut(shortcut?: ShortcutCombo): ShortcutCombo {
+  if (!shortcut) {
+    return DEFAULT_SETTINGS.shortcut
   }
 
-  if (element.isContentEditable) {
-    return true
+  if (shortcut.primaryKey) {
+    return { ...shortcut, primaryKey: true, ctrlKey: false, metaKey: false }
   }
 
-  return Boolean(element.closest("input, textarea, [contenteditable='true']"))
+  if (shortcut.ctrlKey !== shortcut.metaKey) {
+    return { ...shortcut, primaryKey: true, ctrlKey: false, metaKey: false }
+  }
+
+  return { ...shortcut, primaryKey: false }
 }
 
-function getEditableTarget(): HTMLElement | null {
-  const active = document.activeElement
+function getDeepActiveElement(root: Document | ShadowRoot): Element | null {
+  let activeElement = root.activeElement
 
-  if (!isEditableElement(active)) {
+  while (activeElement?.shadowRoot?.activeElement) {
+    activeElement = activeElement.shadowRoot.activeElement
+  }
+
+  return activeElement
+}
+
+function getEditableTargetFromElement(
+  element: Element | null
+): HTMLElement | null {
+  if (!element || !(element instanceof HTMLElement)) {
     return null
   }
 
-  return active.closest("input, textarea, [contenteditable='true']")
+  const editableTarget = element.closest<HTMLElement>(
+    "input, textarea, [contenteditable='true'], [contenteditable='plaintext-only'], [role='textbox']"
+  )
+
+  if (editableTarget) {
+    return editableTarget
+  }
+
+  if (!element.isContentEditable) {
+    return null
+  }
+
+  return element
+}
+
+function getEditableTarget(): HTMLElement | null {
+  return getEditableTargetFromElement(getDeepActiveElement(document))
 }
 
 function getSelectionText() {
@@ -263,11 +305,6 @@ function showPicker(target: HTMLElement, prompts: PromptRecord[]) {
 
   const sortedPrompts = [...prompts].sort((a, b) => b.lastUsedAt - a.lastUsedAt)
 
-  if (!sortedPrompts.length) {
-    showToast("No saved prompts yet")
-    return
-  }
-
   const anchor = getAnchorRect(target)
   const host = document.createElement("div")
   const shadow = host.attachShadow({ mode: "open" })
@@ -314,6 +351,7 @@ function showPicker(target: HTMLElement, prompts: PromptRecord[]) {
     pasteIntoTarget(target, prompt.body)
     void markPromptUsed(prompt)
     closePicker()
+    target.focus()
   }
 
   function renderList() {
@@ -322,7 +360,9 @@ function showPicker(target: HTMLElement, prompts: PromptRecord[]) {
     if (!filteredPrompts.length) {
       const empty = document.createElement("div")
       empty.className = "empty"
-      empty.textContent = "No matching prompts"
+      empty.textContent = sortedPrompts.length
+        ? "No matching prompts"
+        : "No saved prompts yet"
       listElement.append(empty)
       return
     }
@@ -476,7 +516,11 @@ document.addEventListener(
 
 void storageGet<PromptSettings>(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS).then(
   (settings) => {
-    currentSettings = { ...DEFAULT_SETTINGS, ...settings }
+    currentSettings = {
+      ...DEFAULT_SETTINGS,
+      ...settings,
+      shortcut: normalizeShortcut(settings.shortcut),
+    }
   }
 )
 
@@ -488,9 +532,12 @@ getExtensionStorage()?.onChanged?.addListener((changes, areaName) => {
   const nextSettings = changes[SETTINGS_STORAGE_KEY]?.newValue
 
   if (nextSettings) {
+    const settings = nextSettings as PromptSettings
+
     currentSettings = {
       ...DEFAULT_SETTINGS,
-      ...(nextSettings as PromptSettings),
+      ...settings,
+      shortcut: normalizeShortcut(settings.shortcut),
     }
   }
 })

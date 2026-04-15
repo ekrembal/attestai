@@ -37,6 +37,7 @@ import {
   createTitle,
   formatShortcut,
   makePrompt,
+  normalizeShortcut,
   shortcutFromKeyboardEvent,
   storageGet,
   storageSet,
@@ -76,7 +77,11 @@ export function App() {
       ])
 
       setPrompts(sortPrompts(storedPrompts))
-      setSettings({ ...DEFAULT_SETTINGS, ...storedSettings })
+      setSettings({
+        ...DEFAULT_SETTINGS,
+        ...storedSettings,
+        shortcut: normalizeShortcut(storedSettings.shortcut),
+      })
       setIsLoading(false)
     }
 
@@ -154,7 +159,10 @@ export function App() {
       return
     }
 
-    await persistSettings({ ...settings, shortcut })
+    await persistSettings({
+      ...settings,
+      shortcut: normalizeShortcut(shortcut),
+    })
     setIsCapturingShortcut(false)
   }
 
