@@ -49,8 +49,21 @@ type ExtensionStorage = {
   }
 }
 
+type RuntimeApi = {
+  onMessage?: {
+    addListener: (
+      callback: (
+        message: unknown,
+        sender: unknown,
+        sendResponse: (response?: unknown) => void
+      ) => boolean | void
+    ) => void
+  }
+}
+
 const PROMPTS_STORAGE_KEY = "attestai.prompts"
 const SETTINGS_STORAGE_KEY = "attestai.settings"
+const RUN_PROMPT_FLOW_MESSAGE = "attestai.runPromptFlow"
 const DEFAULT_SETTINGS: PromptSettings = {
   shortcut: {
     key: " ",
@@ -83,6 +96,15 @@ function getExtensionStorage(): ExtensionStorage | null {
   }
 
   return scope.browser?.storage ?? scope.chrome?.storage ?? null
+}
+
+function getRuntimeApi(): RuntimeApi | null {
+  const scope = globalThis as typeof globalThis & {
+    browser?: { runtime?: RuntimeApi }
+    chrome?: { runtime?: RuntimeApi }
+  }
+
+  return scope.browser?.runtime ?? scope.chrome?.runtime ?? null
 }
 
 async function storageGet<T>(key: string, fallback: T): Promise<T> {
@@ -202,10 +224,25 @@ function getEditableTargetFromElement(
   }
 
   const editableTarget = element.closest<HTMLElement>(
-    "input, textarea, [contenteditable='true'], [contenteditable='plaintext-only'], [role='textbox']"
+    "input, textarea, [contenteditable], [role='textbox']"
   )
 
-  if (editableTarget) {
+  if (
+    editableTarget &&
+    (!(editableTarget instanceof HTMLInputElement) ||
+      ![
+        "button",
+        "checkbox",
+        "color",
+        "file",
+        "hidden",
+        "image",
+        "radio",
+        "range",
+        "reset",
+        "submit",
+      ].includes(editableTarget.type))
+  ) {
     return editableTarget
   }
 
@@ -437,7 +474,7 @@ function showPicker(target: HTMLElement, prompts: PromptRecord[]) {
 }
 
 function handleOutsidePointerDown(event: PointerEvent) {
-  if (pickerHost?.contains(event.target as Node)) {
+  if (pickerHost && event.composedPath().includes(pickerHost)) {
     window.addEventListener("pointerdown", handleOutsidePointerDown, {
       capture: true,
       once: true,
@@ -476,19 +513,24 @@ function showToast(message: string) {
   toastTimer = window.setTimeout(() => toast.remove(), 1800)
 }
 
-async function handleShortcut(event: KeyboardEvent) {
-  if (event.repeat) {
-    return
-  }
+function hasFocusedChildFrame() {
+  return (
+    document.activeElement instanceof HTMLIFrameElement ||
+    document.activeElement instanceof HTMLFrameElement
+  )
+}
 
-  if (!isShortcutMatch(event, currentSettings.shortcut)) {
-    return
-  }
+function isRunPromptFlowMessage(message: unknown) {
+  return (
+    typeof message === "object" &&
+    message !== null &&
+    "type" in message &&
+    message.type === RUN_PROMPT_FLOW_MESSAGE
+  )
+}
 
+async function runPromptFlow() {
   const editableTarget = getEditableTarget()
-
-  event.preventDefault()
-  event.stopPropagation()
 
   if (editableTarget) {
     const prompts = await storageGet<PromptRecord[]>(PROMPTS_STORAGE_KEY, [])
@@ -506,6 +548,21 @@ async function handleShortcut(event: KeyboardEvent) {
   await saveSelection(selectedText)
 }
 
+async function handleShortcut(event: KeyboardEvent) {
+  if (event.repeat) {
+    return
+  }
+
+  if (!isShortcutMatch(event, currentSettings.shortcut)) {
+    return
+  }
+
+  event.preventDefault()
+  event.stopPropagation()
+
+  await runPromptFlow()
+}
+
 document.addEventListener(
   "keydown",
   (event) => {
@@ -513,6 +570,27 @@ document.addEventListener(
   },
   true
 )
+
+getRuntimeApi()?.onMessage?.addListener((message, _sender, sendResponse) => {
+  if (!isRunPromptFlowMessage(message)) {
+    return false
+  }
+
+  if (!document.hasFocus() || hasFocusedChildFrame()) {
+    sendResponse({ handled: false })
+    return false
+  }
+
+  void runPromptFlow()
+    .then(() => {
+      sendResponse({ handled: true })
+    })
+    .catch(() => {
+      sendResponse({ handled: false })
+    })
+
+  return true
+})
 
 void storageGet<PromptSettings>(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS).then(
   (settings) => {
