@@ -5,9 +5,14 @@ import { defineConfig } from "vitest/config"
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: "./",
+  define: {
+    global: "globalThis",
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
+      buffer: "buffer",
       "@": path.resolve(__dirname, "./src"),
     },
   },

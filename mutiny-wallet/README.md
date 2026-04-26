@@ -1,21 +1,42 @@
-# React + TypeScript + Vite + shadcn/ui
+# Mutinynet Wallet
 
-This is a template for a new Vite project with React, TypeScript, and shadcn/ui.
+Mutinynet Wallet is a browser-only demo wallet built with React, TypeScript, and Vite. It derives a single local key, shows one Mutinynet `tb1...` receive address, tracks UTXOs through Esplora, and builds/signs/broadcasts simple P2WPKH spends in the client.
 
-## Adding components
+You can use any of the links below to access the app:
 
-To add components to your app, run the following command:
+- [IPFS gateway (ipfs.io)](https://ipfs.io/ipfs/bafybeigbc6uiz4mpcc5ifywaw6ep332obzshqzzzmn4s5cptiocrtlberu/)
+- [IPFS gateway (dweb.link)](https://dweb.link/ipfs/bafybeigbc6uiz4mpcc5ifywaw6ep332obzshqzzzmn4s5cptiocrtlberu/)
+- [IPFS gateway (cloudflare-ipfs.com)](https://cloudflare-ipfs.com/ipfs/bafybeigbc6uiz4mpcc5ifywaw6ep332obzshqzzzmn4s5cptiocrtlberu/)
+- [IPFS gateway (w3s.link)](https://w3s.link/ipfs/bafybeigbc6uiz4mpcc5ifywaw6ep332obzshqzzzmn4s5cptiocrtlberu/)
+
+## Reproducible build
+
+This repository is configured for deterministic, IPFS-compatible production builds:
+
+- `base: "./"` in Vite keeps generated asset URLs relative so the app works from IPFS gateways and nested content paths.
+- The browser entry imports [`src/polyfill.ts`](./src/polyfill.ts) first so `Buffer` is installed on `globalThis` before app or dependency code runs.
+- The repo pins the toolchain with `Node 22.22.2` and `pnpm 10.33.2`.
+- `package.json` uses exact dependency versions and the committed `pnpm-lock.yaml` locks the full dependency graph.
+- The production build should be run from a clean checkout without local edits so the output and CID match.
+
+## Clean rebuild steps
+
+Use these exact commands from a fresh clone:
 
 ```bash
-npx shadcn@latest add button
+cd mutiny-wallet
+corepack enable
+corepack prepare pnpm@10.33.2 --activate
+nvm use 22.22.2
+pnpm install --frozen-lockfile
+pnpm build
+ipfs add -r -n -Q --cid-version=1 dist
 ```
 
-This will place the ui components in the `src/components` directory.
+If `nvm` is not installed, use another Node version manager or direct install to run exactly `Node 22.22.2` before `pnpm install`.
 
-## Using components
+The production CID for the committed sources is:
 
-To use the components in your app, import them as follows:
-
-```tsx
-import { Button } from "@/components/ui/button"
+```text
+bafybeigbc6uiz4mpcc5ifywaw6ep332obzshqzzzmn4s5cptiocrtlberu
 ```
