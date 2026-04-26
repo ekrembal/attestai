@@ -4,10 +4,10 @@ Mutinynet Wallet is a browser-only demo wallet built with React, TypeScript, and
 
 You can use any of the links below to access the app:
 
-- [IPFS gateway (ipfs.io)](https://ipfs.io/ipfs/bafybeigbc6uiz4mpcc5ifywaw6ep332obzshqzzzmn4s5cptiocrtlberu/)
-- [IPFS gateway (dweb.link)](https://dweb.link/ipfs/bafybeigbc6uiz4mpcc5ifywaw6ep332obzshqzzzmn4s5cptiocrtlberu/)
-- [IPFS gateway (cloudflare-ipfs.com)](https://cloudflare-ipfs.com/ipfs/bafybeigbc6uiz4mpcc5ifywaw6ep332obzshqzzzmn4s5cptiocrtlberu/)
-- [IPFS gateway (w3s.link)](https://w3s.link/ipfs/bafybeigbc6uiz4mpcc5ifywaw6ep332obzshqzzzmn4s5cptiocrtlberu/)
+- [IPFS gateway (ipfs.io)](https://ipfs.io/ipfs/bafybeiafgaowyo4a2epgus45w5zdxaf4veeoifzo5rjx4niftz2wmci5re/)
+- [IPFS gateway (dweb.link)](https://dweb.link/ipfs/bafybeiafgaowyo4a2epgus45w5zdxaf4veeoifzo5rjx4niftz2wmci5re/)
+- [IPFS gateway (cloudflare-ipfs.com)](https://cloudflare-ipfs.com/ipfs/bafybeiafgaowyo4a2epgus45w5zdxaf4veeoifzo5rjx4niftz2wmci5re/)
+- [IPFS gateway (w3s.link)](https://w3s.link/ipfs/bafybeiafgaowyo4a2epgus45w5zdxaf4veeoifzo5rjx4niftz2wmci5re/)
 
 ## Reproducible build
 
@@ -38,5 +38,5 @@ If `nvm` is not installed, use another Node version manager or direct install to
 The production CID for the committed sources is:
 
 ```text
-bafybeigbc6uiz4mpcc5ifywaw6ep332obzshqzzzmn4s5cptiocrtlberu
+bafybeiafgaowyo4a2epgus45w5zdxaf4veeoifzo5rjx4niftz2wmci5re
 ```
